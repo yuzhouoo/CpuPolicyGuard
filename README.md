@@ -1,3 +1,34 @@
+# CPU 策略控制：一加 12 / Android 16 / ColorOS 16
+
+**版本 1.1.0，提供 GitHub Actions 构建入口。** 一加 12 使用 Snapdragon 8 Gen 3，但 CPU policy 编号、频率表、调速器取决于当前设备内核。应用从 `/sys/devices/system/cpu/cpufreq/policy*` 动态检测，不硬编码频点。
+
+## 在 GitHub Actions 上编译 APK（无需本机 Android Studio）
+
+1. 在 GitHub 新建仓库，建议名称 `CpuPolicyGuard`，将本压缩包中 `CpuPolicyGuard-LSPosed/` **内的所有文件与隐藏的 `.github/` 目录**上传到仓库根目录。不要再套一层文件夹。
+2. 仓库 `Actions` 页签，允许 Actions 工作流，选择 `Build Android APK` → `Run workflow` → `Run workflow`。也可推送至 `main`/`master` 自动触发。
+3. 构建成功后，点击当次 workflow 的 `Artifacts` → `CpuPolicyGuard-OnePlus12-Debug-APK` 下载 ZIP，解压获得 `app-debug.apk`。
+4. 下载的是 debug 签名 APK，只适合测试；不同构建签名变化会影响升级安装。若正式发布请配置独立签名密钥。
+
+工作流使用 JDK 17 + Gradle 8.10.2 + Android SDK 35 + AGP 8.6.1。Android 16 手机**不要求**应用 compileSdk 恰好为 36；但低 targetSdk 可能受系统安装限制。`targetSdk 28` 是旧模块兼容取舍，并非保证 ColorOS 16 一定允许安装，遇到旧目标 SDK 阻拦需使用官方允许的安装方式或调整 targetSdk 测试。
+
+## 安装和运行
+
+- 需 Root（Magisk/APatch/KernelSU 等）及兼容的 LSPosed；授予 **本应用** Root 权限。
+- 启用 LSPosed 模块时，作用域**仅选 SystemUI**，不要选择 Android 系统框架。钩子为开机重启时的**可选**补偿；即使不启用 LSPosed，手动修改功能也可尝试使用。
+- 打开 APP → `扫描 CPU 策略组` → 选择 policy → governor 与 min/max（单位 kHz）→ `保存当前策略并立即应用` → `查看实际生效状态`。
+- 调速器可能只有 `walt` / `schedutil` 等有限选项；如果内核未提供其他选项，应用无法创造新的 governor。
+- 性能服务、温控及系统电源 HAL 可能覆盖频率；该模块不能绕过硬件/温控保护。
+- 修改频率有卡顿、耗电、稳定性风险，首次先做保守幅度尝试，并保留 ADB / 恢复环境。
+
+## 已知限制
+
+- 没有真实的一加 12 / ColorOS 16 设备供验证，兼容性待实机测试。
+- 开机广播在 ColorOS 限制后台运行时可能不执行。**不要为提高成功率给 SystemUI 授予 Root 权限**；如果不开启该作用域，仍可手动使用 APP。
+- 恢复的是首次扫描值，而非工厂默认。清除设置后重启才能最大程度让厂商策略重新接管。
+- 无持续写入与 GPU 调整功能。此版本仅用于个人测试。
+
+---
+
 # CPU 策略控制（LSPosed + Root）
 
 一个新的独立 Android LSPosed 模块，控制每个 CPU cpufreq policy 的 `scaling_governor`、`scaling_min_freq` 和 `scaling_max_freq`。
