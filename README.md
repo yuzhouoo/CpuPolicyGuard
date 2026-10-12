@@ -57,3 +57,8 @@
 - 若开机时 Root 管理器不允许后台授权，开机应用可能失败；Root 管理器需允许本 App 和（启用 LSPosed 补偿时）SystemUI 的授权，后者可能存在额外安全风险。可不启用 LSPosed 作用域仅用 App 手动应用。
 - 该项目使用兼容性更高的旧版 Xposed API 82；不同 LSPosed 分支支持情况可能不同。
 - 当前版本不提供 GPU/核心离线控制、周期强制覆盖和调速器底层参数编辑。
+
+
+### GitHub Actions SDK 修复（2026-10-12）
+
+已删除 `android-actions/setup-android@v3`，改为使用 `ubuntu-latest` 预装的 Android SDK，调用 `sdkmanager` 安装 `platforms;android-35` 与 `build-tools;35.0.0`。这避免了旧版 `tools` 包安装失败。若后续构建失败，请查看新的 **Build APK** 日志；本修复未在 GitHub 线上构建验证。
