@@ -58,7 +58,12 @@
 - 该项目使用兼容性更高的旧版 Xposed API 82；不同 LSPosed 分支支持情况可能不同。
 - 当前版本不提供 GPU/核心离线控制、周期强制覆盖和调速器底层参数编辑。
 
+## v1.2 UI / 写入行为更新（待实机验证）
 
-### GitHub Actions SDK 修复（2026-10-12）
-
-已删除 `android-actions/setup-android@v3`，改为使用 `ubuntu-latest` 预装的 Android SDK，调用 `sdkmanager` 安装 `platforms;android-35` 与 `build-tools;35.0.0`。这避免了旧版 `tools` 包安装失败。若后续构建失败，请查看新的 **Build APK** 日志；本修复未在 GitHub 线上构建验证。
+- 调速器独立选择，单个 policy 单独应用；不会修改频率上下限。
+- 频率分组为小核、中核、大核，每组有独立的「应用×核频率限制」按钮；不会更改调速器。
+- 读取当前频率、可用调速器、policy related_cpus；按 `cpuinfo_max_freq` 从低到高自动分组。实际 CPU policy 分组应在一加 12 实机验证。
+- 频率输入界面使用 MHz，小数支持三位，底层写入 kHz；严格检查硬件范围。
+- 视觉调整为深色卡片、分区排布与回读结果提示。
+- 只保留本次操作维度的即时写入，开机脚本组合已保存的独立设置。
+- 本次提供源码供检查，未在设备或 GitHub Actions 上编译验证。
