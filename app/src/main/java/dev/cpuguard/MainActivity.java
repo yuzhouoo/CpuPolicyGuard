@@ -173,8 +173,8 @@ public class MainActivity extends Activity {
             cmd.append("d=").append(BASE).append(p.name).append("\n");
             cmd.append("old_lo=$(cat ${d}/scaling_min_freq)\nold_hi=$(cat ${d}/scaling_max_freq)\n");
             cmd.append("[ ").append(lo).append(" -le ").append(hi).append(" ] || exit 3\n");
-            cmd.append("if [ ").append(lo).append(" -gt "$old_hi" ]; then printf '%s' ").append(hi).append(" > ${d}/scaling_max_freq; fi\n");
-            cmd.append("if [ ").append(hi).append(" -lt "$old_lo" ]; then printf '%s' ").append(lo).append(" > ${d}/scaling_min_freq; fi\n");
+            cmd.append("if [ ").append(lo).append(" -gt \"$old_hi\" ]; then printf '%s' ").append(hi).append(" > ${d}/scaling_max_freq; fi\n");
+            cmd.append("if [ ").append(hi).append(" -lt \"$old_lo\" ]; then printf '%s' ").append(lo).append(" > ${d}/scaling_min_freq; fi\n");
             cmd.append("printf '%s' ").append(lo).append(" > ${d}/scaling_min_freq\n");
             cmd.append("printf '%s' ").append(hi).append(" > ${d}/scaling_max_freq\n");
             cmd.append("echo ").append(quote(p.name+" frequency kHz:")).append("; cat ${d}/scaling_min_freq ${d}/scaling_max_freq\n");

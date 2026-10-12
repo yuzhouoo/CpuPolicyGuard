@@ -62,7 +62,7 @@ jobs:
           gradle-version: '8.10.2'
 
       - name: Build APK
-        run: gradle --no-daemon --stacktrace :app:assembleDebug
+        run: gradle --no-daemon --console=plain --warning-mode=all :app:assembleDebug
 
       - name: Check APK and hash
         run: |
