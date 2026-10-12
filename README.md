@@ -16,3 +16,14 @@ GitHub Actions workflow 已保留不使用有问题的 `setup-android@v3`；上�
 ## v1.3.1 构建修复
 
 修正 MainActivity.java 频率写入逻辑中 Shell 变量的 Java 字符串双引号转义错误。GitHub Actions 使用 plain 输出以便发现 javac 具体报错。未在 Android SDK 环境下完成实际 APK 编译验证。
+
+
+## v1.3.2 运行中调速器与诊断
+
+- 独立显示各 policy 当前 `scaling_governor`，支持只读手动刷新。
+- 调速器写入逐 policy 记录 BEFORE、WRITE_RC、AFTER、Root 退出码，并在约 1.8 秒后重新读取。
+- 支持一键复制日志，便于判断 Root 拒绝、内核不支持或 ColorOS/Power HAL 覆盖。
+- 仍不在启动时自动应用设置；写入仅由点击按钮触发。
+- 可用调速器/策略组仍以设备实时扫描为准。
+
+注意：版本尚未经真实一加 12 或 GitHub Actions 编译测试。

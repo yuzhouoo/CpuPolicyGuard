@@ -22,7 +22,8 @@ public class MainActivity extends Activity {
     private final ArrayList<GroupCard> cards = new ArrayList<>();
     private LinearLayout root, groupPanel, governorPanel;
     private Spinner globalGovernor;
-    private TextView status, summary;
+    private TextView status, summary, governorActual, debugView;
+    private String lastDebug = "尚无调试日志";
     private SharedPreferences pref;
     private volatile boolean busy;
 
@@ -51,12 +52,16 @@ public class MainActivity extends Activity {
         Button refresh=button(root,"⟳  扫描 / 刷新 CPU",true,()->scan());
         button(root,"复制设备与 CPU 内核检测报告（只读）",false,()->report());
         summary=label(root,"正在扫描……",13,MUTED,false);
+        button(root,"刷新当前实际调速器（只读）",false,()->refreshGovernors());
         governorPanel=column();root.addView(governorPanel);
         groupPanel=column(); root.addView(groupPanel);
         label(root,"说明",17,TEXT,true);
         label(root,"调速器全局统一选择并一次应用到所有 policy；小核、中核、大核分别设置频率。只允许手动应用，不在开机或 SystemUI 启动时重写频率。数值单位 MHz。",13,MUTED,false);
         Button restore=button(root,"恢复首次扫描值 / 清理旧开机脚本",false,()->restore());
         status=label(root,"需要 Root 授权。首次更改建议小幅调整，并确认温控和稳定性。",13,MUTED,false);
+        label(root,"调试日志",18,TEXT,true);
+        button(root,"复制调试日志",false,()->copyDebug());
+        debugView=label(root,"暂无操作日志",12,MUTED,false);
         scan();
     }
     private int dp(int px){ return (int)(getResources().getDisplayMetrics().density*px+0.5f); }
@@ -108,7 +113,9 @@ public class MainActivity extends Activity {
         LinearLayout govCard=column();govCard.setPadding(dp(16),dp(14),dp(16),dp(18));govCard.setBackground(background(CARD,18));
         LinearLayout.LayoutParams gp=new LinearLayout.LayoutParams(-1,-2);gp.topMargin=dp(14);governorPanel.addView(govCard,gp);
         label(govCard,"统一 CPU 调速器",19,TEXT,true);
-        label(govCard,"仅列出所有 policy 共同支持的调速器。此按钮只修改调速器，不触碰频率。",12,MUTED,false);
+        label(govCard,"仅列出所有 policy 共同支持的调速器。仅手动写入，不修改频率。",12,MUTED,false);
+        governorActual=label(govCard,"正在读取当前实际调速器……",13,BLUE,false);
+        updateActualFromPolicies(found);
         LinkedHashSet<String> common=null;
         for(Policy p:found){LinkedHashSet<String> opts=new LinkedHashSet<>(Arrays.asList(p.governors.split("\\s+")));opts.remove("");
             if(common==null)common=opts;else common.retainAll(opts);
@@ -120,6 +127,7 @@ public class MainActivity extends Activity {
         if(choices.contains(current))globalGovernor.setSelection(choices.indexOf(current));
         else if(!found.isEmpty())label(govCard,"各 policy 当前调速器不同，请选择后统一应用。",12,MUTED,false);
         Button govButton=button(govCard,"统一应用调速器（所有策略组）",true,()->applyGlobalGovernor());
+        button(govCard,"重新读取实际调速器（只读）",false,()->refreshGovernors());
         govButton.setEnabled(!choices.isEmpty());
         if(choices.isEmpty())label(govCard,"没有检测到共同支持的调速器，已禁用写入。",12,0xffffab91,false);
         label(groupPanel,"核心频率 · 独立控制",18,TEXT,true);
@@ -155,15 +163,88 @@ public class MainActivity extends Activity {
     }
     private boolean allowed(Policy p,String gov){return gov!=null && !gov.isEmpty() && Arrays.asList(p.governors.split("\\s+")).contains(gov);}
     private boolean validRange(Policy p,long lo,long hi){return lo>=p.hardwareMin && hi<=p.hardwareMax && lo<=hi;}
-    private void applyGlobalGovernor(){
-        if(policies.isEmpty() || globalGovernor.getSelectedItem()==null)return;
-        String gov=String.valueOf(globalGovernor.getSelectedItem());
-        StringBuilder cmd=new StringBuilder("set -e\n");
-        for(Policy p:policies){if(!allowed(p,gov)){status.setText(p.name+" 不支持 "+gov);return;}
-            cmd.append("[ -d ").append(BASE).append(p.name).append(" ] || exit 2\n");
+    private void updateActualFromPolicies(List<Policy> found){
+        if(governorActual==null)return;
+        StringBuilder t=new StringBuilder("当前内核调速器（非下拉框选中值）\n");
+        for(Policy p:found)t.append(p.name).append(" · CPU ").append(p.relatedCpus)
+                .append(" : ").append(p.governor.isEmpty()?"未提供":p.governor).append("\n");
+        governorActual.setText(t.toString().trim());
+    }
+    private void showDebug(String log){
+        lastDebug=log;
+        runOnUiThread(()->{if(debugView!=null)debugView.setText(log);});
+    }
+    private void copyDebug(){
+        ClipboardManager cb=(ClipboardManager)getSystemService(Context.CLIPBOARD_SERVICE);
+        if(cb!=null)cb.setPrimaryClip(ClipData.newPlainText("CPU Governor Debug",lastDebug));
+        status.setText("调试日志已复制，可直接发送分析");
+    }
+    private static String readGovScript(){
+        return "for d in "+BASE+"policy*; do " +
+            "[ -d \"$d\" ] || continue; p=${d##*/}; " +
+            "c=$(cat \"$d/related_cpus\" 2>/dev/null); " +
+            "g=$(cat \"$d/scaling_governor\" 2>/dev/null); " +
+            "printf '%s|%s|%s\\n' \"$p\" \"$c\" \"$g\"; done";
+    }
+    private void refreshGovernors(){task("正在读取当前内核调速器……",()->{
+        Root.Result res=Root.execute(readGovScript(),15000);
+        ArrayList<Policy> now=new ArrayList<>();
+        for(String line:res.output.split("\n")){
+            String[] v=line.split("\\|",-1);
+            if(v.length>=3 && nameOk(v[0])){
+                Policy p=new Policy();p.name=v[0];p.relatedCpus=v[1];p.governor=v[2];now.add(p);
+            }
         }
-        for(Policy p:policies){cmd.append(lineGov(p,gov));cmd.append("echo ").append(quote(p.name+" governor:")).append("; cat ").append(BASE).append(p.name).append("/scaling_governor\n");}
-        task("正在统一应用调速器（不修改频率）……",()->"调速器结果：\n"+executeManual(cmd.toString())+"\n请重新扫描确认。");
+        showDebug("[只读刷新] Root exit="+res.exitCode+"\n"+res.output);
+        runOnUiThread(()->updateActualFromPolicies(now));
+        return "已读取 "+now.size()+" 个 policy 的当前调速器"+(res.exitCode==0?"":"；Root 命令异常："+res.exitCode);
+    });}
+    private void applyGlobalGovernor(){
+        if(policies.isEmpty() || globalGovernor.getSelectedItem()==null){status.setText("无可用策略组或调速器，请先扫描");return;}
+        String gov=String.valueOf(globalGovernor.getSelectedItem());
+        ArrayList<Policy> targets=new ArrayList<>(policies);
+        for(Policy p:targets){if(!allowed(p,gov)){status.setText(p.name+" 不支持 "+gov);return;}}
+        task("正在逐组写入调速器并检查结果……",()->{
+            StringBuilder log=new StringBuilder("CPU Policy Guard / governor diagnostic\n目标: ").append(gov).append("\n");
+            boolean allOK=true;
+            for(Policy p:targets){
+                String d=BASE+p.name;
+                // Read before, attempt one write, explicitly check exit status, then read after.
+                // Do not use set -e or allow a trailing echo to conceal a failed write.
+                String script="d="+quote(d)+"; " +
+                    "printf 'BEFORE='; cat \"$d/scaling_governor\" 2>&1; " +
+                    "printf '%s' "+quote(gov)+" > \"$d/scaling_governor\" 2>&1; " +
+                    "rc=$?; printf 'WRITE_RC=%s\\n' \"$rc\"; " +
+                    "printf 'AFTER='; cat \"$d/scaling_governor\" 2>&1; " +
+                    "test \"$rc\" -eq 0";
+                Root.Result result=Root.execute(script,15000);
+                log.append("\n[").append(p.name).append(", cpu=").append(p.relatedCpus)
+                    .append("] root_exit=").append(result.exitCode).append("\n").append(result.output).append("\n");
+                if(result.exitCode!=0 || !result.output.contains("AFTER="+gov))allOK=false;
+            }
+            // Delayed read detects power HAL / vendor service reverting the setting.
+            try{Thread.sleep(1800);}catch(InterruptedException ignored){Thread.currentThread().interrupt();}
+            Root.Result verify=Root.execute(readGovScript(),15000);
+            log.append("\n[DELAYED READBACK ~1.8s] exit=").append(verify.exitCode)
+                .append("\n").append(verify.output).append("\n");
+            ArrayList<Policy> actual=new ArrayList<>();
+            int seen=0;
+            for(String line:verify.output.split("\n")){
+                String[] v=line.split("\\|",-1);
+                if(v.length>=3 && nameOk(v[0])){
+                    Policy p=new Policy();p.name=v[0];p.relatedCpus=v[1];p.governor=v[2];actual.add(p);
+                    if(v[2].trim().equals(gov))seen++;
+                }
+            }
+            boolean verified=verify.exitCode==0 && seen==targets.size() && actual.size()==targets.size();
+            log.append("\nSUMMARY: immediate_write=").append(allOK)
+                .append("; delayed_match=").append(verified).append("; matched=").append(seen)
+                .append("/").append(targets.size()).append("\n");
+            showDebug(log.toString());
+            runOnUiThread(()->updateActualFromPolicies(actual));
+            if(verified)return "应用成功："+seen+"/"+targets.size()+" 个 policy 延迟回读均为 "+gov;
+            return "应用未完全生效："+seen+"/"+targets.size()+"；请复制下方调试日志。可能是写入失败或 ColorOS 覆盖。";
+        });
     }
     private void applyFrequencies(List<RowControls> target){
         StringBuilder cmd=new StringBuilder("set -e\n");
